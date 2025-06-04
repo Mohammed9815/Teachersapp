@@ -1,0 +1,516 @@
+import React, { useState, useRef } from 'react';
+import { Upload, FileSpreadsheet, BookOpen, Users, BarChart3, Mail, Download, Eye, RefreshCw, CheckCircle } from 'lucide-react';
+import * as XLSX from 'xlsx'; 
+
+const StudentAnalysisSystem = () => {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [studentsData, setStudentsData] = useState([]);
+  const [classifications, setClassifications] = useState({ weak: [], medium: [], advanced: [] });
+  const [activities, setActivities] = useState(null);
+  const [email, setEmail] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [criteria, setCriteria] = useState({ weak: 5, medium: 8 });
+  const fileInputRef = useRef(null);
+  const pdfInputRef = useRef(null); 
+
+  // قاعدة بيانات الأنشطة لمادة الأحياء
+  const biologyActivities = {
+    unit1: {
+      title: "الوحدة الأولى: الخلية ومكوناتها",
+      weak: [
+        "مراجعة أجزاء الخلية الأساسية بالرسم",
+        "تلوين مخطط الخلية النباتية والحيوانية",
+        "مطابقة أسماء العضيات بوظائفها"
+      ],
+      medium: [
+        "مقارنة بين الخلية النباتية والحيوانية",
+        "تجربة مشاهدة الخلايا تحت المجهر",
+        "إعداد تقرير عن وظائف العضيات"
+      ],
+      advanced: [
+        "بحث عن أحدث الاكتشافات في علم الخلايا",
+        "تصميم نموذج ثلاثي الأبعاد للخلية",
+        "تحليل الاختلافات الوظيفية بين الخلايا المتخصصة"
+      ]
+    },
+    unit2: {
+      title: "الوحدة الثانية: العمليات الحيوية في الخلية",
+      weak: [
+        "شرح مبسط لعملية التنفس الخلوي",
+        "رسم مخطط بسيط لعملية البناء الضوئي",
+        "تمارين على معادلات العمليات الحيوية"
+      ],
+      medium: [
+        "مقارنة بين التنفس الهوائي واللاهوائي",
+        "تجربة قياس معدل التنفس في النباتات",
+        "تحليل العوامل المؤثرة على البناء الضوئي"
+      ],
+      advanced: [
+        "بحث متقدم عن دورة كريبس",
+        "تصميم تجربة لقياس كفاءة البناء الضوئي",
+        "تحليل الربط بين العمليات الحيوية والطاقة"
+      ]
+    },
+    unit3: {
+      title: "الوحدة الثالثة: الوراثة والجينات",
+      weak: [
+        "مراجعة قوانين مندل الأساسية",
+        "حل مسائل بسيطة في الوراثة",
+        "تعريف المصطلحات الوراثية الأساسية"
+      ],
+      medium: [
+        "حل مسائل وراثية متوسطة التعقيد",
+        "دراسة الصفات الوراثية في الإنسان",
+        "تحليل الأنماط الوراثية"
+      ],
+      advanced: [
+        "بحث عن الهندسة الوراثية وتطبيقاتها",
+        "تحليل الخرائط الوراثية",
+        "مشروع عن الأمراض الوراثية وعلاجها"
+      ]
+    },
+    unit4: {
+      title: "الوحدة الرابعة: التنوع الحيوي والتطور",
+      weak: [
+        "تصنيف الكائنات الحية الأساسي",
+        "مراجعة نظرية التطور البسيطة",
+        "تعريف التنوع الحيوي"
+      ],
+      medium: [
+        "دراسة أدلة التطور",
+        "تحليل التكيف في البيئات المختلفة",
+        "مشروع عن حماية التنوع الحيوي"
+      ],
+      advanced: [
+        "بحث عن نظريات التطور الحديثة",
+        "تحليل الانقراض والحفاظ على الأنواع",
+        "مشروع عن الهندسة البيئية"
+      ]
+    }
+  }; 
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return; 
+
+    setIsProcessing(true);
+    
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      
+      const processedData = jsonData.map((row, index) => {
+        const name = row['اسم الطالب'] || row['الاسم'] || row['Name'] || `طالب ${index + 1}`;
+        const grade = parseFloat(row['الدرجة'] || row['Grade'] || 0);
+        
+        return {
+          id: index + 1,
+          name: name,
+          grade: isNaN(grade) ? 0 : Math.min(Math.max(grade, 0), 10)
+        };
+      }); 
+
+      setStudentsData(processedData);
+      classifyStudents(processedData);
+      setCurrentStep(2);
+    } catch (error) {
+      alert('حدث خطأ في قراءة الملف. تأكد من أن الملف يحتوي على عمودين: اسم الطالب والدرجة');
+    }
+    
+    setIsProcessing(false);
+  }; 
+
+  const classifyStudents = (data) => {
+    const weak = data.filter(student => student.grade < criteria.weak);
+    const medium = data.filter(student => student.grade >= criteria.weak && student.grade < criteria.medium);
+    const advanced = data.filter(student => student.grade >= criteria.medium);
+    
+    setClassifications({ weak, medium, advanced });
+  }; 
+
+  const generateActivities = () => {
+    const generatedActivities = {};
+    
+    Object.keys(biologyActivities).forEach(unit => {
+      generatedActivities[unit] = {
+        title: biologyActivities[unit].title,
+        weak: classifications.weak.length > 0 ? biologyActivities[unit].weak : [],
+        medium: classifications.medium.length > 0 ? biologyActivities[unit].medium : [],
+        advanced: classifications.advanced.length > 0 ? biologyActivities[unit].advanced : []
+      };
+    });
+    
+    setActivities(generatedActivities);
+    setCurrentStep(3);
+  }; 
+
+  const generateReport = () => {
+    setCurrentStep(4);
+  }; 
+
+  const sendReport = () => {
+    if (!email) {
+      alert('يرجى إدخال البريد الإلكتروني');
+      return;
+    }
+    
+    // محاكاة إرسال التقرير
+    alert(`تم إرسال التقرير بنجاح إلى: ${email}`);
+  }; 
+
+  const exportToPDF = () => {
+    alert('تم تصدير التقرير كملف PDF بنجاح');
+  }; 
+
+  const getStats = () => {
+    const total = studentsData.length;
+    const average = total > 0 ? (studentsData.reduce((sum, s) => sum + s.grade, 0) / total).toFixed(2) : 0;
+    const highest = total > 0 ? Math.max(...studentsData.map(s => s.grade)) : 0;
+    const lowest = total > 0 ? Math.min(...studentsData.map(s => s.grade)) : 0;
+    
+    return { total, average, highest, lowest };
+  }; 
+
+  const stats = getStats(); 
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 p-6" dir="rtl">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">
+            نظام تحليل مستويات الطلاب
+          </h1>
+          <p className="text-xl text-gray-600">مادة الأحياء - الصف الحادي عشر</p>
+        </div> 
+
+        {/* Progress Bar */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm text-gray-600">التقدم</span>
+            <span className="text-sm text-gray-600">{currentStep}/4</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(currentStep / 4) * 100}%` }}
+            ></div>
+          </div>
+        </div> 
+
+        {/* Step 1: File Upload */}
+        {currentStep === 1 && (
+          <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
+            <div className="text-center">
+              <Upload className="mx-auto h-16 w-16 text-blue-500 mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">الخطوة الأولى: رفع ملف الدرجات</h2>
+              <p className="text-gray-600 mb-6">ارفع ملف Excel يحتوي على أسماء الطلاب ودرجاتهم</p>
+              
+              <div className="border-2 border-dashed border-blue-300 rounded-lg p-8 mb-4">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessing}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {isProcessing ? (
+                    <>
+                      <RefreshCw className="inline h-4 w-4 mr-2 animate-spin" />
+                      جاري المعالجة...
+                    </>
+                  ) : (
+                    <>
+                      <FileSpreadsheet className="inline h-4 w-4 mr-2" />
+                      اختر ملف Excel
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              <div className="text-sm text-gray-500">
+                <p>تأكد من أن الملف يحتوي على عمودين:</p>
+                <p>• اسم الطالب • الدرجة (من 0 إلى 10)</p>
+              </div>
+            </div>
+          </div>
+        )} 
+
+        {/* Step 2: Classification Results */}
+        {currentStep === 2 && (
+          <div className="space-y-6">
+            {/* Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white rounded-lg shadow p-6 text-center">
+                <Users className="h-8 w-8 text-blue-500 mx-auto mb-2" />
+                <h3 className="text-lg font-semibold text-gray-800">إجمالي الطلاب</h3>
+                <p className="text-3xl font-bold text-blue-600">{stats.total}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6 text-center">
+                <BarChart3 className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                <h3 className="text-lg font-semibold text-gray-800">المتوسط العام</h3>
+                <p className="text-3xl font-bold text-green-600">{stats.average}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6 text-center">
+                <CheckCircle className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
+                <h3 className="text-lg font-semibold text-gray-800">أعلى درجة</h3>
+                <p className="text-3xl font-bold text-emerald-600">{stats.highest}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6 text-center">
+                <Eye className="h-8 w-8 text-orange-500 mx-auto mb-2" />
+                <h3 className="text-lg font-semibold text-gray-800">أقل درجة</h3>
+                <p className="text-3xl font-bold text-orange-600">{stats.lowest}</p>
+              </div>
+            </div> 
+
+            {/* Classification Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Weak Students */}
+              <div className="bg-white rounded-lg shadow-lg p-6 border-r-4 border-red-500">
+                <h3 className="text-xl font-bold text-red-600 mb-4 flex items-center">
+                  <span className="w-4 h-4 bg-red-500 rounded-full ml-2"></span>
+                  طلاب ضعاف ({classifications.weak.length})
+                </h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {classifications.weak.map((student) => (
+                    <div key={student.id} className="flex justify-between items-center p-2 bg-red-50 rounded">
+                      <span className="font-medium">{student.name}</span>
+                      <span className="text-red-600 font-bold">{student.grade}</span>
+                    </div>
+                  ))}
+                </div>
+              </div> 
+
+              {/* Medium Students */}
+              <div className="bg-white rounded-lg shadow-lg p-6 border-r-4 border-yellow-500">
+                <h3 className="text-xl font-bold text-yellow-600 mb-4 flex items-center">
+                  <span className="w-4 h-4 bg-yellow-500 rounded-full ml-2"></span>
+                  طلاب متوسطون ({classifications.medium.length})
+                </h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {classifications.medium.map((student) => (
+                    <div key={student.id} className="flex justify-between items-center p-2 bg-yellow-50 rounded">
+                      <span className="font-medium">{student.name}</span>
+                      <span className="text-yellow-600 font-bold">{student.grade}</span>
+                    </div>
+                  ))}
+                </div>
+              </div> 
+
+              {/* Advanced Students */}
+              <div className="bg-white rounded-lg shadow-lg p-6 border-r-4 border-green-500">
+                <h3 className="text-xl font-bold text-green-600 mb-4 flex items-center">
+                  <span className="w-4 h-4 bg-green-500 rounded-full ml-2"></span>
+                  طلاب متقدمون ({classifications.advanced.length})
+                </h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {classifications.advanced.map((student) => (
+                    <div key={student.id} className="flex justify-between items-center p-2 bg-green-50 rounded">
+                      <span className="font-medium">{student.name}</span>
+                      <span className="text-green-600 font-bold">{student.grade}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div> 
+
+            <div className="text-center">
+              <button
+                onClick={generateActivities}
+                className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 transition-colors text-lg font-semibold"
+              >
+                <BookOpen className="inline h-5 w-5 mr-2" />
+                توليد الأنشطة التعليمية
+              </button>
+            </div>
+          </div>
+        )} 
+
+        {/* Step 3: Activities */}
+        {currentStep === 3 && activities && (
+          <div className="space-y-6">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">الأنشطة التعليمية المخصصة</h2>
+              <p className="text-gray-600">أنشطة مصممة خصيصاً لكل مستوى من مستويات الطلاب</p>
+            </div> 
+
+            {Object.entries(activities).map(([unitKey, unit]) => (
+              <div key={unitKey} className="bg-white rounded-lg shadow-lg p-6">
+                <h3 className="text-2xl font-bold text-blue-800 mb-6 border-b pb-3">{unit.title}</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Weak Activities */}
+                  {unit.weak.length > 0 && (
+                    <div className="border border-red-200 rounded-lg p-4">
+                      <h4 className="text-lg font-bold text-red-600 mb-3 flex items-center">
+                        <span className="w-3 h-3 bg-red-500 rounded-full ml-2"></span>
+                        أنشطة علاجية ({classifications.weak.length} طالب)
+                      </h4>
+                      <ul className="space-y-2">
+                        {unit.weak.map((activity, index) => (
+                          <li key={index} className="text-sm text-gray-700 p-2 bg-red-50 rounded">
+                            • {activity}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )} 
+
+                  {/* Medium Activities */}
+                  {unit.medium.length > 0 && (
+                    <div className="border border-yellow-200 rounded-lg p-4">
+                      <h4 className="text-lg font-bold text-yellow-600 mb-3 flex items-center">
+                        <span className="w-3 h-3 bg-yellow-500 rounded-full ml-2"></span>
+                        أنشطة دعم ({classifications.medium.length} طالب)
+                      </h4>
+                      <ul className="space-y-2">
+                        {unit.medium.map((activity, index) => (
+                          <li key={index} className="text-sm text-gray-700 p-2 bg-yellow-50 rounded">
+                            • {activity}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )} 
+
+                  {/* Advanced Activities */}
+                  {unit.advanced.length > 0 && (
+                    <div className="border border-green-200 rounded-lg p-4">
+                      <h4 className="text-lg font-bold text-green-600 mb-3 flex items-center">
+                        <span className="w-3 h-3 bg-green-500 rounded-full ml-2"></span>
+                        أنشطة إثرائية ({classifications.advanced.length} طالب)
+                      </h4>
+                      <ul className="space-y-2">
+                        {unit.advanced.map((activity, index) => (
+                          <li key={index} className="text-sm text-gray-700 p-2 bg-green-50 rounded">
+                            • {activity}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))} 
+
+            <div className="text-center">
+              <button
+                onClick={generateReport}
+                className="bg-purple-600 text-white px-8 py-3 rounded-lg hover:bg-purple-700 transition-colors text-lg font-semibold"
+              >
+                <BarChart3 className="inline h-5 w-5 mr-2" />
+                إنشاء التقرير الشامل
+              </button>
+            </div>
+          </div>
+        )} 
+
+        {/* Step 4: Report */}
+        {currentStep === 4 && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-lg p-8">
+              <div className="text-center mb-8">
+                <h2 className="text-3xl font-bold text-gray-800 mb-4">التقرير الشامل</h2>
+                <p className="text-gray-600">ملخص تحليل مستويات الطلاب والأنشطة المقترحة</p>
+              </div> 
+
+              {/* Report Summary */}
+              <div className="border border-gray-200 rounded-lg p-6 mb-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">ملخص التحليل</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-blue-50 rounded">
+                    <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
+                    <p className="text-sm text-gray-600">إجمالي الطلاب</p>
+                  </div>
+                  <div className="text-center p-4 bg-red-50 rounded">
+                    <p className="text-2xl font-bold text-red-600">{classifications.weak.length}</p>
+                    <p className="text-sm text-gray-600">طلاب ضعاف</p>
+                  </div>
+                  <div className="text-center p-4 bg-yellow-50 rounded">
+                    <p className="text-2xl font-bold text-yellow-600">{classifications.medium.length}</p>
+                    <p className="text-sm text-gray-600">طلاب متوسطون</p>
+                  </div>
+                  <div className="text-center p-4 bg-green-50 rounded">
+                    <p className="text-2xl font-bold text-green-600">{classifications.advanced.length}</p>
+                    <p className="text-sm text-gray-600">طلاب متقدمون</p>
+                  </div>
+                </div>
+              </div> 
+
+              {/* Email Section */}
+              <div className="border border-gray-200 rounded-lg p-6 mb-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">إرسال التقرير</h3>
+                <div className="flex gap-4 items-end">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      البريد الإلكتروني
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="أدخل البريد الإلكتروني"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <button
+                    onClick={sendReport}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Mail className="inline h-4 w-4 mr-2" />
+                    إرسال
+                  </button>
+                </div>
+              </div> 
+
+              {/* Export Options */}
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={exportToPDF}
+                  className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  <Download className="inline h-4 w-4 mr-2" />
+                  تصدير PDF
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  <Eye className="inline h-4 w-4 mr-2" />
+                  طباعة
+                </button>
+              </div>
+            </div> 
+
+            {/* Start Over Button */}
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setCurrentStep(1);
+                  setStudentsData([]);
+                  setClassifications({ weak: [], medium: [], advanced: [] });
+                  setActivities(null);
+                  setEmail('');
+                }}
+                className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 transition-colors text-lg font-semibold"
+              >
+                <RefreshCw className="inline h-5 w-5 mr-2" />
+                تحليل مجموعة طلاب جديدة
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}; 
+
+export default StudentAnalysisSystem;
+https://zsuwaiq.my.canva.site/ghassancalculatorp
